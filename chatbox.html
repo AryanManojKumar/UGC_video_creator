@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UGC AI Chatbot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 1.5em;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.bot {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.bot .message-content {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-image {
+            max-width: 100%;
+            border-radius: 12px;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .image-grid .message-image {
+            width: 100%;
+            height: auto;
+            margin-top: 0;
+        }
+
+        .image-label {
+            font-size: 0.8em;
+            color: #667eea;
+            font-weight: bold;
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        .image-actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 8px;
+            justify-content: center;
+        }
+
+        .script-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .script-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        .script-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .script-display {
+            background: #f5f7fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .script-display h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .video-display {
+            background: #f5f7fa;
+            border-left: 4px solid #764ba2;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 8px;
+        }
+
+        .video-display h4 {
+            color: #764ba2;
+            margin-bottom: 10px;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .video-player {
+            width: 100%;
+            max-width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .download-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .download-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        .status-message {
+            text-align: center;
+            color: #667eea;
+            font-style: italic;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
+        .chat-input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .upload-preview {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .preview-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #667eea;
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-item .remove-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .preview-item .label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            font-size: 10px;
+            padding: 2px;
+            text-align: center;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .upload-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .upload-btn {
+            background: #f5f7fa;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s;
+        }
+
+        .upload-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .upload-btn input {
+            display: none;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .message-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px;
+            background: white;
+            border-radius: 18px;
+            width: fit-content;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .typing-indicator.active {
+            display: block;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            60%,
+            100% {
+                transform: translateY(0);
+            }
+
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .script-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin-top: 8px;
+            transition: all 0.3s;
+        }
+
+        .script-btn:hover {
+            background: #764ba2;
+        }
+
+        .welcome-message {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+        }
+
+        .welcome-message h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🎨 UGC AI Assistant</h1>
+            <p>Upload images and chat to generate UGC content</p>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="welcome-message">
+                <h2>Welcome!</h2>
+                <p>Upload a person image and a product image, then describe what you want to create.</p>
+                <p>I'll generate 4 diverse UGC images for you!</p>
+            </div>
+        </div>
+
+        <div class="chat-input-area">
+            <div class="upload-preview" id="uploadPreview"></div>
+
+            <div class="input-row">
+                <div class="upload-buttons">
+                    <label class="upload-btn" title="Upload Person Image">
+                        👤
+                        <input type="file" id="personImage" accept="image/*">
+                    </label>
+                    <label class="upload-btn" title="Upload Product Image">
+                        📦
+                        <input type="file" id="productImage" accept="image/*">
+                    </label>
+                </div>
+
+                <input type="text" class="message-input" id="messageInput" placeholder="Type your message...">
+
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let conversationId = null;
+        let personFile = null;
+        let productFile = null;
+        const API_BASE_URL = 'http://localhost:8000';
+
+        // Handle file uploads
+        document.getElementById('personImage').addEventListener('change', function (e) {
+            personFile = e.target.files[0];
+            updatePreview();
+        });
+
+        document.getElementById('productImage').addEventListener('change', function (e) {
+            productFile = e.target.files[0];
+            updatePreview();
+        });
+
+        function updatePreview() {
+            const preview = document.getElementById('uploadPreview');
+            preview.innerHTML = '';
+
+            if (personFile) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.innerHTML += `
+                        <div class="preview-item">
+                            <img src="${e.target.result}" alt="Person">
+                            <div class="label">Person</div>
+                            <button class="remove-btn" onclick="removePerson()">×</button>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(personFile);
+            }
+
+            if (productFile) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.innerHTML += `
+                        <div class="preview-item">
+                            <img src="${e.target.result}" alt="Product">
+                            <div class="label">Product</div>
+                            <button class="remove-btn" onclick="removeProduct()">×</button>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(productFile);
+            }
+        }
+
+        function removePerson() {
+            personFile = null;
+            document.getElementById('personImage').value = '';
+            updatePreview();
+        }
+
+        function removeProduct() {
+            productFile = null;
+            document.getElementById('productImage').value = '';
+            updatePreview();
+        }
+
+        function addMessage(type, content, isImage = false) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            // Remove welcome message if exists
+            const welcome = messagesDiv.querySelector('.welcome-message');
+            if (welcome) {
+                welcome.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            if (isImage) {
+                const img = document.createElement('img');
+                img.src = content;
+                img.className = 'message-image';
+                img.onclick = () => window.open(content, '_blank');
+                contentDiv.appendChild(img);
+            } else {
+                contentDiv.textContent = content;
+            }
+
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addImageGrid(imagePaths) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            // Remove welcome message if exists
+            const welcome = messagesDiv.querySelector('.welcome-message');
+            if (welcome) {
+                welcome.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const gridDiv = document.createElement('div');
+            gridDiv.className = 'image-grid';
+
+            imagePaths.forEach((imagePath, index) => {
+                const imageUrl = `${API_BASE_URL}/image/${imagePath}`;
+                
+                const imgContainer = document.createElement('div');
+                
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.className = 'message-image';
+                img.onclick = () => window.open(imageUrl, '_blank');
+                
+                const label = document.createElement('div');
+                label.className = 'image-label';
+                label.textContent = `Variant ${index + 1}`;
+                
+                // Add script generation button
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'image-actions';
+                
+                const scriptBtn = document.createElement('button');
+                scriptBtn.className = 'script-btn';
+                scriptBtn.innerHTML = '🎬 Generate Video';
+                scriptBtn.onclick = () => generateScript(imagePath, scriptBtn);
+                
+                actionsDiv.appendChild(scriptBtn);
+                
+                imgContainer.appendChild(img);
+                imgContainer.appendChild(label);
+                imgContainer.appendChild(actionsDiv);
+                gridDiv.appendChild(imgContainer);
+            });
+
+            contentDiv.appendChild(gridDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function generateScript(imagePath, buttonElement) {
+            // Disable button
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '⏳ Generating...';
+
+            // Show status message
+            const statusDiv = addStatusMessage('📝 Step 1/2: Generating video script...');
+
+            try {
+                // Get product name from user (you can make this more sophisticated)
+                const productName = prompt('Enter product name:', 'Product') || 'Product';
+                const tone = 'energetic and authentic';
+                const platform = 'Instagram';
+
+                const response = await fetch(`${API_BASE_URL}/chat/ugc/script`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ugc_image_path: imagePath,
+                        product_name: productName,
+                        tone: tone,
+                        platform: platform,
+                        conversation_id: conversationId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Update status for video generation
+                statusDiv.textContent = '🎬 Step 2/2: Generating video with Veo-3.1... (2-5 minutes)';
+
+                // Display script
+                addScriptMessage(data.script, imagePath);
+
+                // Check if video was generated
+                if (data.video_url) {
+                    statusDiv.textContent = '✅ Script and video generated successfully!';
+                    addVideoMessage(data.video_url, imagePath);
+                    addMessage('bot', `All done! Your UGC video is ready. The script and video have been generated for ${imagePath}.`);
+                } else {
+                    statusDiv.textContent = '✅ Script generated! Video generation in progress...';
+                    addMessage('bot', `Script is ready! Video generation may still be processing. Check back in a few minutes.`);
+                }
+
+                // Re-enable button
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '✅ Complete';
+
+            } catch (error) {
+                console.error('Error generating script/video:', error);
+                statusDiv.textContent = '❌ Error occurred';
+                addMessage('bot', `Sorry, there was an error: ${error.message}`);
+                
+                // Re-enable button
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '📝 Generate Script';
+            }
+        }
+
+        function addScriptMessage(script, imagePath) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const scriptDiv = document.createElement('div');
+            scriptDiv.className = 'script-display';
+            
+            const header = document.createElement('h4');
+            header.textContent = `📹 Video Script for ${imagePath}`;
+            
+            const scriptText = document.createElement('pre');
+            scriptText.textContent = script;
+            scriptText.style.margin = '0';
+            scriptText.style.fontFamily = 'inherit';
+            
+            scriptDiv.appendChild(header);
+            scriptDiv.appendChild(scriptText);
+            contentDiv.appendChild(scriptDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addVideoMessage(videoUrl, imagePath) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const videoDiv = document.createElement('div');
+            videoDiv.className = 'video-display';
+            
+            const header = document.createElement('h4');
+            header.textContent = `🎬 Generated Video for ${imagePath}`;
+            
+            const video = document.createElement('video');
+            video.src = videoUrl;
+            video.controls = true;
+            video.className = 'video-player';
+            video.style.width = '100%';
+            video.style.borderRadius = '12px';
+            video.style.marginTop = '10px';
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = videoUrl;
+            downloadLink.download = `ugc_video_${Date.now()}.mp4`;
+            downloadLink.className = 'download-btn';
+            downloadLink.textContent = '⬇️ Download Video';
+            downloadLink.style.display = 'inline-block';
+            downloadLink.style.marginTop = '10px';
+            downloadLink.style.padding = '8px 16px';
+            downloadLink.style.background = '#667eea';
+            downloadLink.style.color = 'white';
+            downloadLink.style.borderRadius = '8px';
+            downloadLink.style.textDecoration = 'none';
+            
+            videoDiv.appendChild(header);
+            videoDiv.appendChild(video);
+            videoDiv.appendChild(downloadLink);
+            contentDiv.appendChild(videoDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addStatusMessage(text) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'status-message';
+            statusDiv.textContent = text;
+            messagesDiv.appendChild(statusDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return statusDiv;
+        }
+
+        function showTyping() {
+            const messagesDiv = document.getElementById('chatMessages');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message bot';
+            typingDiv.innerHTML = `
+                <div class="typing-indicator active">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            `;
+            typingDiv.id = 'typingIndicator';
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function hideTyping() {
+            const typing = document.getElementById('typingIndicator');
+            if (typing) {
+                typing.remove();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            // Add user message
+            addMessage('user', message);
+            input.value = '';
+
+            // Disable send button
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+
+            if (personFile && productFile) {
+                // Generate images with streaming
+                await generateWithStreaming(message);
+            } else {
+                // Chat mode
+                showTyping();
+                await chatWithBot(message);
+                hideTyping();
+            }
+
+            sendBtn.disabled = false;
+        }
+
+        async function generateWithStreaming(message) {
+            const formData = new FormData();
+            formData.append('message', message);
+            formData.append('person_image', personFile);
+            formData.append('product_image', productFile);
+            if (conversationId) {
+                formData.append('conversation_id', conversationId);
+            }
+
+            let statusDiv = addStatusMessage('🎨 Generating UGC images... This may take 1-2 minutes.');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/chat/ugc/upload/simple`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Update conversation ID
+                conversationId = data.conversation_id;
+
+                // Add assistant response
+                addMessage('bot', data.assistant_message);
+
+                // Show generated images if available
+                if (data.generated_images && data.generated_images.length > 0) {
+                    statusDiv.textContent = `✅ Generated ${data.generated_images.length} UGC images!`;
+                    
+                    // Add a message before showing images
+                    addMessage('bot', `Great! I've created ${data.generated_images.length} diverse UGC variations for you:`);
+                    
+                    // Show images in a grid if there are multiple
+                    if (data.generated_images.length > 1) {
+                        addImageGrid(data.generated_images);
+                    } else {
+                        // Single image
+                        const imageUrl = `${API_BASE_URL}/image/${data.generated_images[0]}`;
+                        addMessage('bot', imageUrl, true);
+                    }
+                    
+                    // Final message
+                    addMessage('bot', `All ${data.generated_images.length} images are ready! Each one has a different pose, angle, and composition. Click any image to view full size.`);
+                } else {
+                    statusDiv.textContent = `⚠️ No images were generated`;
+                    addMessage('bot', `The generation process completed, but no images were created. Please try again.`);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = `❌ Error occurred`;
+                addMessage('bot', `Sorry, there was an error: ${error.message}`);
+            }
+        }
+
+        async function chatWithBot(message) {
+            const formData = new FormData();
+            formData.append('message', message);
+            if (conversationId) {
+                formData.append('conversation_id', conversationId);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/chat/ugc/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                conversationId = data.conversation_id;
+                addMessage('bot', data.assistant_message);
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('bot', `Error: ${error.message}`);
+            }
+        }
+
+        // Allow Enter key to send
+        document.getElementById('messageInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+
+</html>
