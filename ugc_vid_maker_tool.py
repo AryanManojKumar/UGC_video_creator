@@ -161,58 +161,29 @@ if __name__ == "__main__":
     tool = Veo3VideoMakerTool()
     
     result = tool._run(
-        image_reference="ugc_fb54f3f9-aefa-474d-b6ac-9f82a41145a4_20251214_121128.png",
-        script_text='''FORMAT:
-Vertical 9:16 (Instagram Stories)
-
-DURATION:
-8 seconds
-
-OUTPUT CONSTRAINT:
-Silent video (no speech audio, no music, no captions). Subtle, continuous speech-mimicking lip motion from 0s through the final frame without stopping. Product never approaches mouth/face. Only partial product visible at all times; fine print/barcodes/nutrition text must be naturally obscured.
-
-SCENE:
-Use the exact person, outfit, hair, and environment from the provided UGC image reference. Medium close-up framing with torso visible.
-
-CAMERA:
-Handheld smartphone feel, medium close-up, gentle push-in (very subtle) with stable horizon. Keep subject centered within Instagram safe areas.
-
-SUBJECT:
-The same creator from the reference image, calm demeanor, intentional eye contact with camera, relaxed posture.
+        image_reference="ugc_ea0bf77a-dc81-4770-b12e-403df1597d1f_20251223_160955_1.png",
+        script_text='''FORMAT: Single continuous-shot UGC video script (silent, lip-sync only) for Instagram Stories
+DURATION: 8 seconds
+OUTPUT CONSTRAINT: One shot only; no cuts, no transitions, no on-screen text; continuous speech-mimicking lip motion for the full 0–8s
+CAMERA: Medium close-up (chest to face), vertical 9:16, subtle handheld realism, fixed framing (no zoom/pan)
+SUBJECT: Same creator, outfit, hair, and setting exactly as in the provided UGC image reference; calm, confident demeanor with steady eye contact
 
 ACTION TIMELINE:
-  0–2s:
-Subject faces camera with calm, steady eye contact and subtle continuous lip motion as if speaking softly. One hand holds the product at mid-chest level, but it’s mostly out of frame—only a corner/edge of the Starbucks coffee packaging peeks in from the lower-right side. Fingers naturally cover any text; only brand color and a partial logo shape may be hinted.
-  2–4s:
-A small, natural wrist adjustment brings a slightly different partial angle of the product into view (still only a portion visible). Subject gives a gentle, approving micro-nod while maintaining continuous lip motion. The other hand briefly smooths or taps the front of their shirt/torso area casually, then returns to a relaxed position.
-  4–6s:
-Subject glances down briefly toward the product (eyes dip for a moment), then returns to direct eye contact. Product remains at chest level; grip stays relaxed. The camera continues a barely noticeable push-in, keeping the product partially cropped and text obscured.
-  6–8s:
-Subject holds steady, calm expression, continuing subtle lip motion through the end. Product motion settles with only a small natural sway from handheld movement. Maintain partial product visibility at the lower edge/side of frame; no deliberate “showing” gesture.
+  0–8s: The creator faces the camera in the same position and environment as the reference image. They maintain steady eye contact and perform continuous, natural speech-mimicking lip motion for the entire line: “Quick trail break—my Red Bull’s keeping me steady for the last climb. Almost at the view.”
+  - Throughout: Calm, conversational expression; slight head micro-nods timed to emphasis (“trail break,” “steady,” “last climb,” “Almost”).
+  - One hand holds a partially visible redbull can at chest/torso height near the lower edge of frame; the other arm stays relaxed and mostly out of frame. The can remains generally stable, with only tiny grip micro-adjustments.
 
-PRODUCT HANDLING CONSTRAINT:
-Product must remain at chest/torso level the entire time. No lifting toward face. No sipping or drinking. Grip relaxed; no pointing at labels.
+PRODUCT HANDLING: Relaxed one-hand grip; product stays below chin level at all times; never approaches mouth/face; no sipping or drinking gestures; no pointing directly at the can—just natural holding during the “trail break” moment.
 
-PRODUCT VISIBILITY:
-Never fully visible. Only a partial section appears in frame at any moment. Fingers and cropping must obscure fine printed text, nutrition labels, and barcodes; only brand colors and a partial logo may be visible. 
+PRODUCT VISIBILITY: Only a partial section of the can appears in frame (cropped/obscured by fingers and framing). Fine printed text, nutrition labels, and barcodes are not fully visible; any logo presence is partial and not fully readable.
 
-DEPTH OF FIELD:
-Natural smartphone depth; subject in clear focus, background slightly soft but recognizable as the same environment from the reference.
+MOTION STYLE: Minimal natural movement only—subtle handheld camera drift, slight posture shift, tiny hand micro-adjustments; no fast motion. Lip motion remains continuous with no pauses or resets.
 
-SUBTLE MOTION:
-Continuous speech-mimicking lip motion throughout. Minimal head movement (micro-nods). Gentle handheld sway; very subtle push-in.
+LIGHTING: Match the reference image lighting exactly (natural, realistic; no stylized changes).
 
-ENVIRONMENT:
-Exactly as in the reference image—no new props or background changes introduced.
+ENVIRONMENT: Exactly the same background/location as the reference image; no added props or changes.       
 
-LIGHTING:
-Match the reference image lighting (same direction, softness, and color temperature). No dramatic changes. 
-
-MOTION DETAILS:
-Keep movements calm and unhurried. Avoid fast pans. Maintain stable framing within safe areas; product stays partially cropped and naturally obscured.
-
-ENDING FRAME:
-Camera becomes slightly more stable for the last half-second; subject maintains direct eye contact and continuous subtle lip motion through the final frame. Product remains partially visible at chest level with text still obscured, ready for seamless continuation.''',  # your script output here
+ENDING FRAME: The creator remains in the same framing and posture as prior moments; motion gently settles while lip motion continues through the final frame, maintaining a stable, seamless end state.''',  # your script output here
         duration_seconds=8
     )
 

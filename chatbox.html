@@ -622,16 +622,43 @@
             buttonElement.disabled = true;
             buttonElement.innerHTML = '⏳ Generating...';
 
-            // Show status message
-            const statusDiv = addStatusMessage('📝 Step 1/2: Generating video script...');
-
             try {
-                // Get product name from user (you can make this more sophisticated)
+                // Get product name and avatar selection from user
                 const productName = prompt('Enter product name:', 'Product') || 'Product';
+                
+                // Avatar selection with voice names
+                const avatarChoice = prompt(
+                    'Select Avatar Voice:\n' +
+                    '1 - Harry (Male)\n' +
+                    '2 - Rachel (Female)\n' +
+                    '3 - Drew (Male)\n' +
+                    '4 - Clyde (Male)\n' +
+                    '5 - Paul (Male)\n' +
+                    '6 - Aria (Female)\n' +
+                    '7 - Domi (Female)\n' +
+                    '8 - Dave (Male)\n' +
+                    '9 - Roger (Male)\n' +
+                    '10 - Fin (Male)\n\n' +
+                    'Enter number (1-10):', 
+                    '1'
+                );
+                
+                let avatarId = parseInt(avatarChoice) || 1;
+                
+                // Validate avatar ID
+                if (avatarId < 1 || avatarId > 10) {
+                    alert('Invalid avatar ID. Using default (Harry).');
+                    avatarId = 1;
+                }
+                
                 const tone = 'energetic and authentic';
                 const platform = 'Instagram';
 
-                const response = await fetch(`${API_BASE_URL}/chat/ugc/script`, {
+                // Show status message
+                const statusDiv = addStatusMessage('🎬 Starting complete video generation workflow...');
+
+                // Call the new complete workflow endpoint
+                const response = await fetch(`${API_BASE_URL}/chat/ugc/generate-video`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -639,6 +666,7 @@
                     body: JSON.stringify({
                         ugc_image_path: imagePath,
                         product_name: productName,
+                        avatar_id: avatarId,
                         tone: tone,
                         platform: platform,
                         conversation_id: conversationId
@@ -651,20 +679,35 @@
 
                 const data = await response.json();
 
-                // Update status for video generation
-                statusDiv.textContent = '🎬 Step 2/2: Generating video with Veo-3.1... (2-5 minutes)';
+                // Update status
+                statusDiv.textContent = '✅ Complete workflow finished!';
+
+                // Display dialogue
+                if (data.dialogue) {
+                    addDialogueMessage(data.dialogue, data.voice_used, imagePath);
+                }
 
                 // Display script
-                addScriptMessage(data.script, imagePath);
+                if (data.script) {
+                    addScriptMessage(data.script, imagePath);
+                }
 
-                // Check if video was generated
+                // Display audio
+                if (data.audio_file) {
+                    addAudioMessage(data.audio_file, data.voice_used, imagePath);
+                }
+
+                // Display original video
                 if (data.video_url) {
-                    statusDiv.textContent = '✅ Script and video generated successfully!';
-                    addVideoMessage(data.video_url, imagePath);
-                    addMessage('bot', `All done! Your UGC video is ready. The script and video have been generated for ${imagePath}.`);
+                    addVideoMessage(data.video_url, imagePath, "Original Video (No Lipsync)");
+                }
+
+                // Display final lipsynced video
+                if (data.lipsynced_video_url) {
+                    addLipsyncedVideoMessage(data.lipsynced_video_url, imagePath);
+                    addMessage('bot', `🎉 Your complete UGC video is ready! This is the final lipsynced version with ${data.voice_used} voice perfectly synced to the video.`);
                 } else {
-                    statusDiv.textContent = '✅ Script generated! Video generation in progress...';
-                    addMessage('bot', `Script is ready! Video generation may still be processing. Check back in a few minutes.`);
+                    addMessage('bot', `Script, audio, and video generated with ${data.voice_used} voice!`);
                 }
 
                 // Re-enable button
@@ -672,13 +715,16 @@
                 buttonElement.innerHTML = '✅ Complete';
 
             } catch (error) {
-                console.error('Error generating script/video:', error);
-                statusDiv.textContent = '❌ Error occurred';
+                console.error('Error generating video:', error);
+                const statusDiv = document.querySelector('.status-message:last-child');
+                if (statusDiv) {
+                    statusDiv.textContent = '❌ Error occurred';
+                }
                 addMessage('bot', `Sorry, there was an error: ${error.message}`);
                 
                 // Re-enable button
                 buttonElement.disabled = false;
-                buttonElement.innerHTML = '📝 Generate Script';
+                buttonElement.innerHTML = '🎬 Generate Video';
             }
         }
 
@@ -691,6 +737,7 @@
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
 
+            // Script section
             const scriptDiv = document.createElement('div');
             scriptDiv.className = 'script-display';
             
@@ -710,7 +757,75 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        function addVideoMessage(videoUrl, imagePath) {
+        function addDialogueMessage(dialogue, voiceUsed, imagePath) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const dialogueDiv = document.createElement('div');
+            dialogueDiv.className = 'script-display';
+            dialogueDiv.style.borderLeftColor = '#764ba2';
+            
+            const dialogueHeader = document.createElement('h4');
+            dialogueHeader.textContent = `🎤 Dialogue (${voiceUsed}) for ${imagePath}`;
+            dialogueHeader.style.color = '#764ba2';
+            
+            const dialogueText = document.createElement('pre');
+            dialogueText.textContent = dialogue;
+            dialogueText.style.margin = '0';
+            dialogueText.style.fontFamily = 'inherit';
+            
+            dialogueDiv.appendChild(dialogueHeader);
+            dialogueDiv.appendChild(dialogueText);
+            contentDiv.appendChild(dialogueDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addAudioMessage(audioFile, voiceUsed, imagePath) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const audioDiv = document.createElement('div');
+            audioDiv.className = 'video-display';
+            audioDiv.style.borderLeftColor = '#764ba2';
+            
+            const header = document.createElement('h4');
+            header.textContent = `🎤 Voice Audio (${voiceUsed}) for ${imagePath}`;
+            header.style.color = '#764ba2';
+            
+            const audio = document.createElement('audio');
+            audio.src = `${API_BASE_URL}/audio/${audioFile}`;
+            audio.controls = true;
+            audio.style.width = '100%';
+            audio.style.marginTop = '10px';
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = `${API_BASE_URL}/audio/${audioFile}`;
+            downloadLink.download = audioFile;
+            downloadLink.className = 'download-btn';
+            downloadLink.textContent = '⬇️ Download Audio';
+            
+            audioDiv.appendChild(header);
+            audioDiv.appendChild(audio);
+            audioDiv.appendChild(downloadLink);
+            contentDiv.appendChild(audioDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addVideoMessage(videoUrl, imagePath, title = null) {
             const messagesDiv = document.getElementById('chatMessages');
 
             const messageDiv = document.createElement('div');
@@ -723,7 +838,7 @@
             videoDiv.className = 'video-display';
             
             const header = document.createElement('h4');
-            header.textContent = `🎬 Generated Video for ${imagePath}`;
+            header.textContent = title || `🎬 Generated Video for ${imagePath}`;
             
             const video = document.createElement('video');
             video.src = videoUrl;
@@ -745,6 +860,56 @@
             downloadLink.style.color = 'white';
             downloadLink.style.borderRadius = '8px';
             downloadLink.style.textDecoration = 'none';
+            
+            videoDiv.appendChild(header);
+            videoDiv.appendChild(video);
+            videoDiv.appendChild(downloadLink);
+            contentDiv.appendChild(videoDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addLipsyncedVideoMessage(videoUrl, imagePath) {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            const videoDiv = document.createElement('div');
+            videoDiv.className = 'video-display';
+            videoDiv.style.borderLeftColor = '#28a745';
+            videoDiv.style.background = '#f0fff4';
+            
+            const header = document.createElement('h4');
+            header.textContent = `✨ Final Lipsynced Video for ${imagePath}`;
+            header.style.color = '#28a745';
+            
+            const video = document.createElement('video');
+            video.src = videoUrl;
+            video.controls = true;
+            video.className = 'video-player';
+            video.style.width = '100%';
+            video.style.borderRadius = '12px';
+            video.style.marginTop = '10px';
+            video.style.border = '3px solid #28a745';
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = videoUrl;
+            downloadLink.download = `ugc_lipsynced_${Date.now()}.mp4`;
+            downloadLink.className = 'download-btn';
+            downloadLink.textContent = '⬇️ Download Final Video';
+            downloadLink.style.display = 'inline-block';
+            downloadLink.style.marginTop = '10px';
+            downloadLink.style.padding = '10px 20px';
+            downloadLink.style.background = '#28a745';
+            downloadLink.style.color = 'white';
+            downloadLink.style.borderRadius = '8px';
+            downloadLink.style.textDecoration = 'none';
+            downloadLink.style.fontWeight = 'bold';
             
             videoDiv.appendChild(header);
             videoDiv.appendChild(video);

@@ -28,15 +28,15 @@ def create_prompt_agent():
 
     with langsmith.trace(
         name="configure_prompt_llm",
-        tags=["llm-configuration", "gpt-5"]
+        tags=["llm-configuration", "gpt-5.2"]
     ) as llm_trace:
         llm = LLM(
-            model="openai/gpt-5-2025-08-07",
+            model="gpt-5.2-2025-12-11",
             api_key=os.getenv("AIML_API_KEY"),
             base_url="https://api.aimlapi.com/v1",
             temperature=0.7
         )
-        llm_trace.outputs = {"llm": "openai/gpt-5-2025-08-07"}
+        llm_trace.outputs = {"llm": "gpt-5.2-2025-12-11"}
 
     agent = Agent(
         role="UGC Prompt Variator",

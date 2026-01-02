@@ -51,7 +51,15 @@ Variation guidelines:
 - Variant 1: Mid-shot, holding product with right hand, facing camera directly
 - Variant 2: Waist-up, holding product with left hand, body slightly angled
 - Variant 3: Close framing, both hands on product, front view
-- Variant 4: Mid-shot, one hand gesture, body at 45-degree angle"""
+- Variant 4: Mid-shot, one hand gesture, body at 45-degree angle
+
+GLOBAL CONSTRAINTS (MANDATORY):
+- In all prompt variants, the product must be held below face level (below chin/jawline), at chest or torso height only
+- The product must never overlap or approach the mouth, lips, jawline, or lower face
+- Hands must not occlude the lips or mouth area; the mouth must remain fully visible for later lip-sync
+- Fine printed text, nutrition labels, and barcodes must be naturally obscured by grip, angle, depth of field, or crop
+- Avoid sharp focus on small product text; prioritize natural blur or partial occlusion
+"""
 
         with langsmith.trace(
             name="call_gpt5_for_variants",

@@ -20,7 +20,7 @@ os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT", "ugc-orchestrat
 @traceable(
     name="create_chat_agent",
     tags=["agent-creation", "crewai", "chat"],
-    metadata={"model": "gpt-5-2025-08-07", "provider": "aiml-api", "mode": "chat"}
+    metadata={"model": "gpt-5-2", "provider": "aiml-api", "mode": "chat"}
 )
 def create_chat_agent():
     """
@@ -28,94 +28,15 @@ def create_chat_agent():
     """
     with langsmith.trace(
         name="configure_chat_llm",
-        tags=["llm-configuration", "gpt-5", "chat"]
+        tags=["llm-configuration", "gpt-5.2", "chat"]
     ) as llm_trace:
         llm = LLM(
-            model="openai/gpt-5-2025-08-07",
+            model="gpt-5.2-2025-12-11",
             api_key=os.getenv("AIML_API_KEY"),
             base_url="https://api.aimlapi.com/v1",
             temperature=0.7
         )
-        llm_trace.outputs = {"llm": "openai/gpt-5-2025-08-07"}
-
-    agent = Agent(
-        role="UGC AI Assistant",
-        goal="Help users understand UGC generation capabilities and answer their questions",
-        backstory="""You are a friendly AI assistant specializing in User-Generated Content (UGC) image creation.
-
-Your capabilities:
-- Generate 4 diverse UGC images when users upload a person image and a product image
-- Use advanced AI models (nano-banana-pro-edit) for realistic image composition
-- Create variations with different poses, angles, and styles
-- Provide guidance on how to use the UGC generation system
-
-When users ask what you can do, explain:
-1. You can generate authentic-looking UGC images by combining a person photo with a product photo
-2. You create 4 different variants for variety
-3. Users need to upload both a person image and a product image to generate UGC
-4. You can also chat and answer questions about the system
-
-Be helpful, friendly, and informative. If users haven't uploaded images yet, encourage them to do so to try the UGC generation.""",
-        tools=[],
-        llm=llm,
-        verbose=True,
-        allow_delegation=False,
-        max_iter=3
-    )
-
-    return agent
-
-@traceable(
-    name="chat_with_agent",
-    tags=["chat", "conversation"],
-    metadata={"mode": "general-chat"}
-)
-def chat_with_agent(message: str):
-    """
-    Handle general chat without image generation
-    """
-    agent = create_chat_agent()
-    
-    task = Task(
-        description=f"""Respond to the user's message: "{message}"
-        
-Be helpful and informative. If they ask what you can do, explain your UGC generation capabilities.""",
-        expected_output="A helpful response to the user's message",
-        agent=agent,
-        human_input=False
-    )
-    
-    crew = Crew(
-        agents=[agent],
-        tasks=[task],
-        verbose=True,
-        max_iter=3,
-        full_output=False
-    )
-    
-    result = crew.kickoff()
-    return result
-
-@traceable(
-    name="create_chat_agent",
-    tags=["agent-creation", "crewai", "chat"],
-    metadata={"model": "gpt-5-2025-08-07", "provider": "aiml-api", "mode": "chat"}
-)
-def create_chat_agent():
-    """
-    Create a conversational agent for general chat without tools
-    """
-    with langsmith.trace(
-        name="configure_chat_llm",
-        tags=["llm-configuration", "gpt-5", "chat"]
-    ) as llm_trace:
-        llm = LLM(
-            model="openai/gpt-5-2025-08-07",
-            api_key=os.getenv("AIML_API_KEY"),
-            base_url="https://api.aimlapi.com/v1",
-            temperature=0.7
-        )
-        llm_trace.outputs = {"llm": "openai/gpt-5-2025-08-07"}
+        llm_trace.outputs = {"llm": "gpt-5.2-2025-12-11"}
 
     agent = Agent(
         role="UGC AI Assistant",

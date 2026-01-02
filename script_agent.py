@@ -28,39 +28,43 @@ def create_script_agent():
 
     with langsmith.trace(
         name="configure_script_llm",
-        tags=["llm-configuration", "gpt-5"]
+        tags=["llm-configuration", "gpt-5.2"]
     ) as llm_trace:
         llm = LLM(
-            model="openai/gpt-5-2025-08-07",
+            model="gpt-5.2-2025-12-11",
             api_key=os.getenv("AIML_API_KEY"),
             base_url="https://api.aimlapi.com/v1",
             temperature=0.7
         )
-        llm_trace.outputs = {"llm": "openai/gpt-5-2025-08-07"}
+        llm_trace.outputs = {"llm": "gpt-5.2-2025-12-11"}
 
     agent = Agent(
         role="UGC Video Script Creator",
-        goal="Generate professional 8-second UGC video scripts optimized for Veo 3",
-        backstory="""You are an expert UGC video script writer specializing in authentic creator content.
+        goal="Call the UGC Script Maker tool with the provided parameters",
+        backstory="""You are a tool executor. Your ONLY job is to call the UGC Script Maker tool.
 
-STRICT WORKFLOW:
-1. Receive a UGC image reference and product details
-2. Call the "UGC Script Maker" tool EXACTLY ONCE
-3. When you see the complete script output, you are DONE
-4. Return the script exactly as received
+STRICT INSTRUCTIONS:
+1. Read the parameters from your task
+2. Call the "UGC Script Maker" tool with those exact parameters
+3. Return what the tool gives you
 
-CRITICAL RULES:
-- Call the tool ONLY ONCE
-- Do NOT modify or improve the script
-- Do NOT call the tool again
-- After receiving the script, your task is complete
+YOU CANNOT:
+- Skip calling the tool
+- Return the filename without calling the tool
+- Think about what the output should be
+- Generate your own response
 
-The script will be optimized for Veo 3 video generation with authentic UGC style.""",
+YOU MUST:
+- Always call the tool first
+- Use all parameters given in the task
+- Wait for the tool's response before answering""",
         tools=[script_tool],
         llm=llm,
         verbose=True,
         allow_delegation=False,
-        max_iter=3  # think -> call tool -> return result
+        max_iter=2,  # Reduced to force tool call
+        max_rpm=None,
+        force_tool_use=True  # Force tool usage
     )
 
     return agent

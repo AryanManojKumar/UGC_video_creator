@@ -1,10 +1,11 @@
 """
 UGC Script Maker Tool for CrewAI
-Generates Veo-3-compatible 8-second video scripts using GPT-5.2
+Generates UGC dialogue and Veo-3-compatible 8-second video scripts using GPT-5.2 with vision
 """
 
 import os
-from typing import Type, Optional
+import base64
+from typing import Type, Optional, Dict
 from pydantic import BaseModel, Field
 from crewai.tools import BaseTool
 from openai import OpenAI
@@ -32,35 +33,110 @@ class UGCScriptMakerInput(BaseModel):
         ...,
         description="Target platform for the video (e.g., TikTok, Instagram, YouTube Shorts)"
     )
+    output_filename: str = Field(
+        default=None,
+        description="Optional filename to save the script (default: auto-generated)"
+    )
 
 
 class UGCScriptMakerTool(BaseTool):
     name: str = "UGC Script Maker"
     description: str = (
-        "Generates a highly detailed, Veo-3-compatible 8-second video script "
-        "based on a selected UGC image."
+        "Analyzes a UGC image to generate authentic 8-second dialogue, then creates a "
+        "Veo-3-compatible silent video script. Saves the output to a text file and returns the filename."
     )
     args_schema: Type[BaseModel] = UGCScriptMakerInput
     cache_function: bool = False
+    
+    def _encode_image(self, image_path: str) -> str:
+        """Encode image to base64 for vision API."""
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+    
+    def _generate_dialogue(
+        self, 
+        client: OpenAI, 
+        image_path: str, 
+        product_name: str, 
+        tone: str, 
+        platform: str
+    ) -> str:
+        """Generate 8-second UGC dialogue using GPT-5.2 vision."""
+        
+        dialogue_prompt = f'''You are generating dialogue for an  UGC video.
+
+Dialogue requirements:
+- Target 18–26 words (slightly longer than typical ads)
+- The dialogue should be around the image and the product 
+- Use natural spoken pacing with short pauses implied by commas or em dashes
+- Dialogue should feel like one continuous thought, not punchy slogans
+- Allow reflective, moment-to-moment narration (e.g., effort, progress, mindset)
+- First-person only (“I”, “my”)
+- Calm, grounded delivery — not rushed
+- No call-to-action
+- No exaggerated excitement
+- Must be safe for continuous lip motion (no abrupt stops)
+
+Style guidance:
+- Think “talking while doing something” rather than “selling”
+- Avoid sharp sentence breaks; prefer flowing phrases
+- One idea evolving into the next
+
+Output ONLY the dialogue text.
+No quotes. No labels.
+'''
+
+        # Check if image is URL or local path
+        if image_path.startswith(('http://', 'https://')):
+            image_content = {"type": "image_url", "image_url": {"url": image_path}}
+        else:
+            base64_image = self._encode_image(image_path)
+            image_content = {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{base64_image}"}
+            }
+        
+        try:
+            response = client.chat.completions.create(
+                model="openai/gpt-5-2",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": dialogue_prompt},
+                            image_content
+                        ]
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=100
+            )
+            
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            return f"Error generating dialogue: {str(e)}"
     
     def _run(
         self,
         ugc_image_reference: str,
         product_name: str,
         tone: str,
-        platform: str
+        platform: str,
+        output_filename: str = None
     ) -> str:
         """
-        Generate an 8-second video script optimized for Veo 3.
+        Generate dialogue and 8-second video script optimized for Veo 3.
+        Saves output to a text file for easy access by other agents.
         
         Args:
             ugc_image_reference: Path or URL to the UGC image
             product_name: Name of the product
             tone: Desired tone for the video
             platform: Target platform
+            output_filename: Optional filename to save the script (default: auto-generated)
             
         Returns:
-            Structured 8-second video script
+            Path to the saved script file
         """
         # Initialize OpenAI client with AI/ML API
         api_key = os.getenv("AIML_API_KEY")
@@ -72,84 +148,98 @@ class UGCScriptMakerTool(BaseTool):
             base_url="https://api.aimlapi.com/v1"
         )
         
-        # System prompt for GPT-5.2
-        system_prompt = '''You are a professional UGC commercial video director and script supervisor.
+        # Stage 1: Generate dialogue using vision
+        dialogue = self._generate_dialogue(
+            client, 
+            ugc_image_reference, 
+            product_name, 
+            tone, 
+            platform
+        )
+        
+        if dialogue.startswith("Error"):
+            return dialogue
+        
+        # Stage 2: Generate video script with dialogue context
+        system_prompt = f'''You are a professional UGC video director and lip-sync supervisor for short-form AI-generated videos.
 
-Your task:
-- Generate a SINGLE, production-ready video script optimized for Veo 3
-- The script must feel like authentic creator-made UGC, not a polished advertisement
-- The script must strictly follow the output format below
-- Output ONLY the script, no explanations, no markdown
+DIALOGUE CONTEXT:
+The creator will be speaking the provided dialogue using visual-only lip motion (NO AUDIO).
+
+CORE OBJECTIVE:
+Generate a SINGLE, continuous-shot, production-ready 8-second UGC video script that is perfectly stable for lip-sync and identity consistency.
+
+ABSOLUTE STRUCTURE CONSTRAINT (MANDATORY — NO EXCEPTIONS):
+- The video MUST be ONE continuous shot from start to end
+- NO scene changes, NO cuts, NO transitions, NO jump cuts
+- Do NOT describe multiple scenes, moments, or locations
+- Do NOT use words such as: "Scene 1", "Scene 2", "cut", "montage", "jump", "hero shot", "end card"
+- The camera framing MUST remain consistent for the full duration
 
 GLOBAL RULES (CRITICAL):
-- Assume the person, face, clothing, hair, and environment come directly from the provided UGC image reference
-- Do NOT invent new identities, outfits, locations, props, or backgrounds
-- The video is ALWAYS silent (no speech audio, no music, no ambient sound, no captions)
-- Lip motion may be present but is visual-only
-- The product must NEVER approach the mouth or face
-- No sipping, no pretending to drink
-- Everything described must be physically filmable
-
-PLATFORM & FORMAT RULES:
-- Default format: Vertical 9:16 (Instagram Stories / Reels)
-- Respect Instagram safe areas (avoid extreme top and bottom edges)
-- Duration must match the requested duration exactly
+- Assume the person, face, body, clothing, hair, and environment come directly from the provided UGC image reference
+- Do NOT invent new outfits, props, locations, text, graphics, music, or sound effects
+- The video is ALWAYS silent (no speech audio, no music, no ambient sound)
+- Do NOT include on-screen text, subtitles, captions, or stickers
+- Everything described must be physically filmable and realistic
 
 LIP MOTION CONSTRAINT (MANDATORY):
-- Subtle, continuous speech-mimicking lip motion must persist from 0 seconds through the final frame
-- Lip motion must NOT stop, pause, or freeze at any point, including the ending frame
-- Lip motion continues even if body, camera, or product motion settles
+- continuous speech-mimicking lip motion MUST persist from 0 seconds through the final frame
+- Lip motion must NOT pause, stop, freeze, or reset at any time
+- Lip motion continues even if all other motion becomes minimal near the end
 
-PRODUCT VISIBILITY & TEXT SAFETY (MANDATORY):
-- The product must NEVER be fully visible
-- Only a partial section of the product may appear in frame at any time
-- Fingers, framing, angle, and/or crop must naturally obscure fine printed text, nutrition labels, and barcodes
-- Only brand colors and a partial logo may be visible
-- Never request readable fine print
-
-PRODUCT HANDLING RULES:
-- Product stays at chest or torso level
+PRODUCT HANDLING RULES (MANDATORY):
+- The product must NEVER approach the mouth or face
+- NO sipping, NO pretending to drink
+- Product stays below chin level at all times (chest or torso height only)
 - Grip must look relaxed and natural
-- Product handling must feel casual, not deliberately showcased
+- Product position remains generally stable throughout the clip
+
+PRODUCT VISIBILITY & BRAND SAFETY:
+- The product must NEVER be fully visible
+- Only a partial section of the product may appear in frame
+- Fingers, framing, or crop must naturally obscure fine printed text, nutrition labels, and barcodes
+- Logo may be partially visible but not fully readable
 
 CAMERA & MOTION STYLE:
-- Medium close-up unless specified otherwise
-- Subtle handheld realism
-- Gentle push-in or static framing only
-- No fast pans, no aggressive movement
-
-CLIP CHAINING RULES (IMPORTANT):
-- The ending frame may become more stable to allow seamless continuation into the next clip
-- Product motion may settle near the end
-- Lip motion must still continue through the final frame
+- Medium close-up framing (chest to face)
+- Subtle handheld realism only
+- NO zooms, NO punch-ins, NO pans, NO fast movement
+- Allowed motion is limited to:
+  • natural head micro-movement
+  • subtle hand micro-adjustments
+  • minor posture shifts
 
 EXPRESSION & PERFORMANCE:
-- Energetic but natural creator demeanor
-- No exaggerated facial expressions
-- No wide smiles, laughter, or comedic acting
-- Eye contact with the camera should feel confident and intentional
+- Natural, confident creator demeanor
+- Calm, conversational facial expression
+- NO exaggerated acting, laughter, or dramatic reactions
+- Eye contact with the camera should feel intentional and steady
+
+ENDING FRAME (IMPORTANT):
+- The final frame must visually match the previous frames
+- Motion may gently settle, but lip motion MUST continue
+- The ending frame should be stable enough to chain into the next clip seamlessly
 
 OUTPUT FORMAT (STRICT — FOLLOW EXACTLY):
 
 FORMAT:
 DURATION:
 OUTPUT CONSTRAINT:
-SCENE:
 CAMERA:
 SUBJECT:
 ACTION TIMELINE:
-  0–2s:
-  2–4s:
-  4–6s:
-  6–8s:
-PRODUCT HANDLING CONSTRAINT:
+  0–8s:
+PRODUCT HANDLING:
 PRODUCT VISIBILITY:
-DEPTH OF FIELD:
-SUBTLE MOTION:
-ENVIRONMENT:
+MOTION STYLE:
 LIGHTING:
-MOTION DETAILS:
+ENVIRONMENT:
 ENDING FRAME:
+
+IMPORTANT:
+If the script would require more than one scene, camera change, cut, subtitle, or sip — DO NOT GENERATE IT.
+
 
 '''
         
@@ -160,8 +250,9 @@ UGC Image Reference: {ugc_image_reference}
 Product Name: {product_name}
 Tone: {tone}
 Platform: {platform}
+Dialogue (lip motion): {dialogue}
 
-Use the visual identity from the UGC image reference. Create a script that showcases the product naturally and authentically."""
+Use the visual identity from the UGC image reference. Create a script that showcases the product naturally and authentically while the creator speaks the dialogue."""
         
         try:
             # Call GPT-5.2 via AI/ML API
@@ -175,7 +266,24 @@ Use the visual identity from the UGC image reference. Create a script that showc
             )
             
             script = response.choices[0].message.content
-            return script
+            
+            # Format output with both dialogue and script
+            output = f"""=== UGC DIALOGUE ===
+{dialogue}
+
+=== VIDEO SCRIPT ===
+{script}"""
+            
+            # Generate filename if not provided
+            if not output_filename:
+                import uuid
+                output_filename = f"script_{uuid.uuid4().hex[:8]}.txt"
+            
+            # Save to file
+            with open(output_filename, 'w', encoding='utf-8') as f:
+                f.write(output)
+            
+            return f"[SCRIPT_SAVED] Script saved to: {output_filename}"
             
         except Exception as e:
             return f"Error generating script: {str(e)}"
@@ -186,8 +294,8 @@ if __name__ == "__main__":
     tool = UGCScriptMakerTool()
     
     result = tool._run(
-        ugc_image_reference="ugc_fb54f3f9-aefa-474d-b6ac-9f82a41145a4_20251214_121128.png",
-        product_name="starbucks coffe",
+        ugc_image_reference="ugc_ea0bf77a-dc81-4770-b12e-403df1597d1f_20251223_160955_1.png",
+        product_name="redbull",
         tone="calm",
         platform="instagram stories"
     )
