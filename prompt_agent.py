@@ -40,15 +40,16 @@ def create_prompt_agent():
 
     agent = Agent(
         role="UGC Prompt Variator",
-        goal="Call the prompt variator tool once and return the 4 prompts",
-        backstory="""You are a creative prompt engineer specializing in UGC content.
+        goal="Analyze person and product images, then call the prompt variator tool once to generate 4 prompts",
+        backstory="""You are a creative prompt engineer specializing in UGC content with image analysis capabilities.
 
 STRICT WORKFLOW:
-1. Call the "UGC Prompt Variator" tool EXACTLY ONCE with the base intent
-2. When you see "[PROMPT_GENERATION_COMPLETE]" in the response, you are DONE
-3. Return the 4 prompts exactly as received
-4. DO NOT call the tool again
-5. DO NOT modify or improve the prompts
+1. Receive base_intent, person_image_path, and product_image_path from the task
+2. Call the "UGC Prompt Variator" tool EXACTLY ONCE with all three parameters
+3. When you see "[PROMPT_GENERATION_COMPLETE]" in the response, you are DONE
+4. Return the 4 prompts exactly as received
+5. DO NOT call the tool again
+6. DO NOT modify or improve the prompts
 
 COMPLETION SIGNAL: When you see "[PROMPT_GENERATION_COMPLETE]", immediately finish your task and return the prompts.""",
         tools=[prompt_variator],

@@ -24,7 +24,7 @@ from langsmith.wrappers import wrap_openai
 import langsmith
 
 # Import UGC orchestrator agent (true multi-tool intelligence)
-from ugc_orchestrator_agent import generate_ugc_with_orchestrator
+from ugc_orchestrator_agent import generate_ugc_with_orchestrator, handle_brand_sync
 
 # Load environment variables
 load_dotenv()
@@ -50,6 +50,19 @@ app.add_middleware(
 # Store conversation history and generated images
 conversations = {}
 generated_images = {}
+
+class BrandSyncRequest(BaseModel):
+    industry: str
+    audience: str
+    vibe: str
+    conversation_id: Optional[str] = None
+
+class BrandSyncResponse(BaseModel):
+    conversation_id: str
+    kai_response: str
+    brand_locked: bool
+    timestamp: str
+    trace_url: Optional[str] = None
 
 class ChatRequest(BaseModel):
     message: str
@@ -106,6 +119,109 @@ async def health_check():
         "langsmith_enabled": os.getenv("LANGCHAIN_TRACING_V2") == "true"
     }
 
+@app.post("/orchestrator/brand-sync", response_model=BrandSyncResponse)
+@traceable(
+    name="brand_sync_endpoint",
+    tags=["fastapi", "brand-sync", "orchestrator"],
+    metadata={"endpoint": "/orchestrator/brand-sync"}
+)
+async def brand_sync_endpoint(request: BrandSyncRequest):
+    """
+    Brand sync endpoint - Kai reflects brand understanding
+    No sub-agents, no image generation, just natural language reflection
+    """
+    conversation_id = request.conversation_id or str(uuid.uuid4())
+    
+    if conversation_id not in conversations:
+        conversations[conversation_id] = {
+            "messages": [],
+            "brand": None
+        }
+    
+    # Store brand context
+    conversations[conversation_id]["brand"] = {
+        "industry": request.industry,
+        "audience": request.audience,
+        "vibe": request.vibe,
+        "locked": True
+    }
+    
+    # Add to message history
+    conversations[conversation_id]["messages"].append({
+        "role": "system",
+        "message": f"Brand sync: {request.industry} | {request.audience} | {request.vibe}",
+        "timestamp": datetime.now().isoformat()
+    })
+    
+    run_tree = langsmith.get_current_run_tree()
+    trace_url = None
+    
+    try:
+        print(f"\n{'='*60}")
+        print(f"Brand Sync: {conversation_id}")
+        print(f"Industry: {request.industry}")
+        print(f"Audience: {request.audience}")
+        print(f"Vibe: {request.vibe}")
+        print(f"{'='*60}\n")
+        
+        # Call orchestrator's brand sync handler (direct LLM, no sub-agents)
+        with langsmith.trace(
+            name="kai_brand_reflection",
+            inputs={
+                "industry": request.industry,
+                "audience": request.audience,
+                "vibe": request.vibe
+            },
+            tags=["brand-reflection", "kai"]
+        ) as reflection_trace:
+            kai_response = handle_brand_sync(
+                industry=request.industry,
+                audience=request.audience,
+                vibe=request.vibe
+            )
+            kai_response_str = str(kai_response)
+            reflection_trace.outputs = {"response": kai_response_str}
+        
+        # Add Kai's response to conversation
+        conversations[conversation_id]["messages"].append({
+            "role": "assistant",
+            "message": kai_response_str,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Get trace URL
+        if run_tree and run_tree.id:
+            try:
+                tenant_id = langsmith_client._get_tenant_id()
+                project_name = os.getenv("LANGCHAIN_PROJECT", "ugc-orchestrator")
+                trace_url = f"https://smith.langchain.com/o/{tenant_id}/projects/p/{project_name}/r/{run_tree.id}"
+            except Exception as e:
+                print(f"Could not generate trace URL: {e}")
+                trace_url = None
+        
+        print(f"\n{'='*60}")
+        print(f"Brand Locked: {conversation_id}")
+        print(f"{'='*60}\n")
+        
+        return BrandSyncResponse(
+            conversation_id=conversation_id,
+            kai_response=kai_response_str,
+            brand_locked=True,
+            timestamp=datetime.now().isoformat(),
+            trace_url=trace_url
+        )
+        
+    except Exception as e:
+        print(f"Error in brand sync: {str(e)}")
+        if run_tree and run_tree.id:
+            langsmith_client.create_feedback(
+                run_tree.id,
+                key="error",
+                score=0.0,
+                comment=f"Error: {str(e)}"
+            )
+        raise HTTPException(status_code=500, detail=f"Error processing brand sync: {str(e)}")
+
 @traceable(
     name="chat_ugc_endpoint",
     tags=["fastapi", "ugc-generation"],
@@ -118,9 +234,12 @@ async def chat_ugc(request: ChatRequest):
     conversation_id = request.conversation_id or str(uuid.uuid4())
 
     if conversation_id not in conversations:
-        conversations[conversation_id] = []
+        conversations[conversation_id] = {
+            "messages": [],
+            "brand": None
+        }
 
-    conversations[conversation_id].append({
+    conversations[conversation_id]["messages"].append({
         "role": "user",
         "message": request.message,
         "timestamp": datetime.now().isoformat()
@@ -130,12 +249,57 @@ async def chat_ugc(request: ChatRequest):
     trace_url = None
 
     try:
+        # Get brand context if available
+        brand_context = conversations[conversation_id].get("brand")
+        
         # Check if user wants to generate images (both images uploaded)
         if request.person_image_path and request.product_image_path:
+            # Check if brand is locked
+            if not brand_context or not brand_context.get('locked'):
+                # Brand not synced yet - guide user
+                with langsmith.trace(
+                    name="brand_not_synced_response",
+                    tags=["chat", "brand-required"]
+                ) as chat_trace:
+                    result = chat_with_agent(
+                        "User wants to generate images but hasn't synced brand context yet. Guide them to complete brand sync first.",
+                        brand_context=brand_context
+                    )
+                    chat_trace.outputs = {"result": str(result)}
+                
+                assistant_message = str(result)
+                steps = [{
+                    "type": "guidance",
+                    "description": "Brand sync required before generation",
+                    "timestamp": datetime.now().isoformat()
+                }]
+                
+                conversations[conversation_id]["messages"].append({
+                    "role": "assistant",
+                    "message": assistant_message,
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                return ChatResponse(
+                    conversation_id=conversation_id,
+                    assistant_message=assistant_message,
+                    steps=steps,
+                    generated_images=None,
+                    timestamp=datetime.now().isoformat(),
+                    trace_url=None
+                )
+            
+            # Brand is locked - proceed with generation
+            # Extract brand context values
+            industry = brand_context.get('industry')
+            audience = brand_context.get('audience')
+            vibe = brand_context.get('vibe')
+            
             # Build image metadata
             image_metadata = {
                 "person_image_uploaded": True,
                 "product_image_uploaded": True,
+                "brand_context": brand_context
             }
 
             if os.path.exists(request.person_image_path):
@@ -159,17 +323,21 @@ async def chat_ugc(request: ChatRequest):
             print(f"\n{'='*60}")
             print(f"Processing UGC generation: {conversation_id}")
             print(f"User message: {request.message}")
+            print(f"Brand context: {brand_context}")
             print(f"{'='*60}\n")
             
             with langsmith.trace(
                 name="agent_orchestration",
-                inputs={"message": request.message, "conversation_id": conversation_id},
+                inputs={"message": request.message, "conversation_id": conversation_id, "brand_context": brand_context},
                 tags=["agent-execution", "multi-tool"]
             ) as agent_trace:
                 result = generate_ugc_with_orchestrator(
                     person_image_path=request.person_image_path,
                     product_image_path=request.product_image_path,
-                    base_intent=request.message
+                    base_intent=request.message,
+                    industry=industry,
+                    audience=audience,
+                    vibe=vibe
                 )
                 agent_trace.outputs = {"result": str(result)}
             
@@ -186,7 +354,7 @@ async def chat_ugc(request: ChatRequest):
                 inputs={"message": request.message, "conversation_id": conversation_id},
                 tags=["agent-execution", "chat"]
             ) as chat_trace:
-                result = chat_with_agent(request.message)
+                result = chat_with_agent(request.message, brand_context=brand_context)
                 chat_trace.outputs = {"result": str(result)}
             
             assistant_message = str(result)
@@ -264,7 +432,7 @@ async def chat_ugc(request: ChatRequest):
                 "timestamp": datetime.now().isoformat()
             })
 
-        conversations[conversation_id].append({
+        conversations[conversation_id]["messages"].append({
             "role": "assistant",
             "message": assistant_message,
             "timestamp": datetime.now().isoformat()
@@ -356,11 +524,9 @@ async def chat_ugc_with_upload(
     # ✅ JUST CALL chat_ugc() - it handles everything else
     response = await chat_ugc(request)
 
-    # Clean up temp files
-    if person_image_path and os.path.exists(person_image_path):
-        os.remove(person_image_path)
-    if product_image_path and os.path.exists(product_image_path):
-        os.remove(product_image_path)
+    # ⚠️ DO NOT DELETE TEMP FILES YET - agents may still be using them
+    # Clean up will happen after agents complete (or use background task)
+    # The temp files will be cleaned up by OS or manual cleanup script
 
     # ✅ NO IMAGE HANDLING HERE - just return the response
     return response
@@ -417,7 +583,8 @@ async def get_conversation(conversation_id: str):
 
     return {
         "conversation_id": conversation_id,
-        "messages": conversations[conversation_id],
+        "messages": conversations[conversation_id].get("messages", []),
+        "brand": conversations[conversation_id].get("brand"),
         "generated_image": generated_images.get(conversation_id)
     }
 
@@ -468,10 +635,13 @@ async def generate_script_and_video(request: ScriptRequest):
     conversation_id = request.conversation_id or str(uuid.uuid4())
     
     if conversation_id not in conversations:
-        conversations[conversation_id] = []
+        conversations[conversation_id] = {
+            "messages": [],
+            "brand": None
+        }
     
     # Add user request to conversation
-    conversations[conversation_id].append({
+    conversations[conversation_id]["messages"].append({
         "role": "user",
         "message": f"Generate script, audio, and video for {request.ugc_image_path}",
         "timestamp": datetime.now().isoformat()
@@ -485,6 +655,18 @@ async def generate_script_and_video(request: ScriptRequest):
         if not os.path.exists(request.ugc_image_path):
             raise HTTPException(status_code=404, detail=f"Image not found: {request.ugc_image_path}")
         
+        # Get brand context from conversation
+        brand_context = conversations[conversation_id].get("brand") if isinstance(conversations[conversation_id], dict) else None
+        
+        # Check if brand is locked
+        if not brand_context or not brand_context.get('locked'):
+            raise HTTPException(status_code=400, detail="Brand context must be synced before generating scripts")
+        
+        # Extract brand context values
+        industry = brand_context.get('industry')
+        audience = brand_context.get('audience')
+        vibe = brand_context.get('vibe')
+        
         # Get voice name from avatar_id
         voice_name = AVATAR_VOICE_MAP.get(request.avatar_id, "Harry")
         
@@ -495,6 +677,7 @@ async def generate_script_and_video(request: ScriptRequest):
         print(f"Avatar ID: {request.avatar_id} (Voice: {voice_name})")
         print(f"Tone: {request.tone}")
         print(f"Platform: {request.platform}")
+        print(f"Brand context: {brand_context}")
         print(f"{'='*60}\n")
         
         import time
@@ -509,18 +692,27 @@ async def generate_script_and_video(request: ScriptRequest):
         
         with langsmith.trace(
             name="step1_generate_script",
-            tags=["script-generation"]
+            tags=["script-generation"],
+            inputs={"brand_context": brand_context}
         ) as step1_trace:
             script_agent = create_script_agent()
             
             task1 = Task(
                 description=f"""Generate an 8-second UGC video script with dialogue.
 
+Brand context (LOCKED):
+- Industry: {industry}
+- Audience: {audience}
+- Vibe: {vibe}
+
 Call the "UGC Script Maker" tool with these parameters:
 - ugc_image_reference: {request.ugc_image_path}
 - product_name: {request.product_name}
 - tone: {request.tone}
 - platform: {request.platform}
+- industry: {industry}
+- audience: {audience}
+- vibe: {vibe}
 
 Return the complete output with both dialogue and video script.""",
                 expected_output="Complete output with UGC dialogue and video script sections",
@@ -772,9 +964,12 @@ async def generate_complete_video(request: LipsyncVideoRequest):
     conversation_id = request.conversation_id or str(uuid.uuid4())
     
     if conversation_id not in conversations:
-        conversations[conversation_id] = []
+        conversations[conversation_id] = {
+            "messages": [],
+            "brand": None
+        }
     
-    conversations[conversation_id].append({
+    conversations[conversation_id]["messages"].append({
         "role": "user",
         "message": f"Generate complete lipsynced video for {request.ugc_image_path}",
         "timestamp": datetime.now().isoformat()

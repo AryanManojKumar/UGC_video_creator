@@ -24,7 +24,7 @@ os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT", "ugc-orchestrat
 )
 def create_chat_agent():
     """
-    Create a conversational agent for general chat without tools
+    Create Kai - a conversational UGC creator and creative director
     """
     with langsmith.trace(
         name="configure_chat_llm",
@@ -39,23 +39,30 @@ def create_chat_agent():
         llm_trace.outputs = {"llm": "gpt-5.2-2025-12-11"}
 
     agent = Agent(
-        role="UGC AI Assistant",
-        goal="Help users understand UGC generation capabilities and answer their questions",
-        backstory="""You are a friendly AI assistant specializing in User-Generated Content (UGC) image creation.
+        role="Kai - Senior UGC Creator",
+        goal="Guide brands through UGC creation with confidence and creative direction",
+        backstory="""You are Kai — a senior UGC creator and creative director.
+
+You do not sound like software. You do not ask form-like questions. You reflect understanding first, then guide.
+
+You speak like a real teammate running UGC for the brand. You're confident, calm, human, and creator-led.
 
 Your capabilities:
+- Understand brand context (industry, audience, vibe)
 - Generate 4 diverse UGC images when users upload a person image and a product image
-- Use advanced AI models (nano-banana-pro-edit) for realistic image composition
 - Create variations with different poses, angles, and styles
-- Provide guidance on how to use the UGC generation system
+- Provide creative direction on tone, visuals, and hooks
 
-When users ask what you can do, explain:
-1. You can generate authentic-looking UGC images by combining a person photo with a product photo
-2. You create 4 different variants for variety
-3. Users need to upload both a person image and a product image to generate UGC
-4. You can also chat and answer questions about the system
+You never mention tools, agents, models, or internal processes.
 
-Be helpful, friendly, and informative. If users haven't uploaded images yet, encourage them to do so to try the UGC generation.""",
+When talking to users:
+- Use short paragraphs
+- No bullet dumping
+- No hype language
+- Show you understand their space
+- Be decisive and clear
+
+If users haven't uploaded images yet, guide them naturally to do so.""",
         tools=[],
         llm=llm,
         verbose=True,
@@ -66,21 +73,91 @@ Be helpful, friendly, and informative. If users haven't uploaded images yet, enc
     return agent
 
 @traceable(
-    name="chat_with_agent",
-    tags=["chat", "conversation"],
-    metadata={"mode": "general-chat"}
+    name="handle_brand_sync",
+    tags=["brand-sync", "orchestrator"],
+    metadata={"mode": "brand-reflection"}
 )
-def chat_with_agent(message: str):
+def handle_brand_sync(industry: str, audience: str, vibe: str):
     """
-    Handle general chat without image generation
+    Handle brand sync - Kai reflects brand understanding back to user
+    Direct LLM call, no sub-agents, returns natural language
     """
     agent = create_chat_agent()
     
     task = Task(
+        description=f"""You are Kai, a senior UGC creator.
+
+You've received brand signals:
+
+Industry: {industry}
+Audience: {audience}
+Vibe: {vibe}
+
+Your task:
+- Reflect the brand back confidently
+- Rephrase insights in your own words
+- Show you understand the space
+- Set creative direction (tone, visuals, hooks)
+- Do NOT repeat inputs verbatim
+- Do NOT ask questions yet
+- End by inviting light correction
+
+Tone: Confident, calm, human, creator-led. Short paragraphs. No bullet dumping. No hype language.
+
+Example style:
+"Alright — here's how I'm reading your brand right now.
+
+You're in [industry insight]. Your audience is [audience understanding]. The vibe you're going for is [vibe interpretation].
+
+For UGC, that means [creative direction]. We'll focus on [specific approach].
+
+If anything feels off, tell me and I'll adapt."
+
+Now respond based on the brand signals above.""",
+        expected_output="Natural, confident brand reflection in Kai's voice",
+        agent=agent,
+        human_input=False
+    )
+    
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        verbose=True,
+        max_iter=3,
+        full_output=False
+    )
+    
+    result = crew.kickoff()
+    return result
+
+@traceable(
+    name="chat_with_agent",
+    tags=["chat", "conversation"],
+    metadata={"mode": "general-chat"}
+)
+def chat_with_agent(message: str, brand_context: dict = None):
+    """
+    Handle general chat without image generation
+    Can use brand context if available
+    """
+    agent = create_chat_agent()
+    
+    context_note = ""
+    if brand_context and brand_context.get('locked'):
+        context_note = f"""
+        
+Brand context (already locked):
+- Industry: {brand_context.get('industry')}
+- Audience: {brand_context.get('audience')}
+- Vibe: {brand_context.get('vibe')}
+
+Reference this naturally if relevant to the conversation."""
+    
+    task = Task(
         description=f"""Respond to the user's message: "{message}"
         
-Be helpful and informative. If they ask what you can do, explain your UGC generation capabilities.""",
-        expected_output="A helpful response to the user's message",
+Be helpful and speak like Kai - confident, calm, creator-led.{context_note}""",
+        expected_output="A helpful response in Kai's voice",
         agent=agent,
         human_input=False
     )
@@ -104,7 +181,10 @@ Be helpful and informative. If they ask what you can do, explain your UGC genera
 def generate_ugc_with_orchestrator(
     person_image_path: str,
     product_image_path: str,
-    base_intent: str = None
+    base_intent: str,
+    industry: str,
+    audience: str,
+    vibe: str
 ):
     """
     Generate 4 diverse UGC images using 2-agent sequential workflow.
@@ -117,6 +197,9 @@ def generate_ugc_with_orchestrator(
         person_image_path: Path to the person image
         product_image_path: Path to the product image
         base_intent: Base intent for image generation
+        industry: Brand industry context (required)
+        audience: Brand audience context (required)
+        vibe: Brand vibe context (required)
     
     Returns:
         Result with confirmation of all 4 generated images
@@ -140,9 +223,6 @@ def generate_ugc_with_orchestrator(
             validate_trace.outputs = {"error": error_msg}
             return error_msg
 
-        if not base_intent:
-            base_intent = "A person showcasing a product in a natural, engaging way"
-
         validate_trace.outputs = {"status": "validated"}
 
     # Create both agents
@@ -155,18 +235,39 @@ def generate_ugc_with_orchestrator(
         agent_trace.outputs = {"agents": ["PromptAgent", "ImageGeneratorAgent"]}
 
     # Create Task 1: Generate 4 prompts
+    brand_context_note = f"""
+Brand context (LOCKED):
+- Industry: {industry}
+- Audience: {audience}
+- Vibe: {vibe}
+"""
+    
     with langsmith.trace(
         name="create_prompt_task",
-        inputs={"base_intent": base_intent},
+        inputs={
+            "base_intent": base_intent,
+            "person_image_path": person_image_path,
+            "product_image_path": product_image_path,
+            "brand_context": {"industry": industry, "audience": audience, "vibe": vibe}
+        },
         tags=["task-creation", "prompt-generation"]
     ) as task1_trace:
         task1 = Task(
-            description=f"""Generate 4 diverse UGC prompts.
-
+            description=f"""Generate 4 diverse UGC prompts by analyzing the person and product images.
+{brand_context_note}
 Base intent: "{base_intent}"
+Person image path: "{person_image_path}"
+Product image path: "{product_image_path}"
 
-Call the "UGC Prompt Variator" tool ONCE with this base_intent.
-The tool will return 4 prompts. 
+Call the "UGC Prompt Variator" tool ONCE with these parameters:
+- base_intent: "{base_intent}"
+- person_image_path: "{person_image_path}"
+- product_image_path: "{product_image_path}"
+- industry: "{industry}"
+- audience: "{audience}"
+- vibe: "{vibe}"
+
+The tool will analyze both images and return 4 prompts based on what it sees.
 
 After receiving the prompts, your task is complete. Output the 4 prompts clearly.""",
             expected_output="4 diverse UGC prompts clearly listed and numbered 1-4",

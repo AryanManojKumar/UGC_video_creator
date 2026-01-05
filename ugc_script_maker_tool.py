@@ -33,6 +33,10 @@ class UGCScriptMakerInput(BaseModel):
         ...,
         description="Target platform for the video (e.g., TikTok, Instagram, YouTube Shorts)"
     )
+    # Brand context (required)
+    industry: str = Field(..., description="Brand industry context")
+    audience: str = Field(..., description="Brand audience context")
+    vibe: str = Field(..., description="Brand vibe context")
     output_filename: str = Field(
         default=None,
         description="Optional filename to save the script (default: auto-generated)"
@@ -59,11 +63,29 @@ class UGCScriptMakerTool(BaseTool):
         image_path: str, 
         product_name: str, 
         tone: str, 
-        platform: str
+        platform: str,
+        industry: str,
+        audience: str,
+        vibe: str
     ) -> str:
         """Generate 8-second UGC dialogue using GPT-5.2 vision."""
         
-        dialogue_prompt = f'''You are generating dialogue for an  UGC video.
+        dialogue_prompt = f"""You are generating dialogue for an UGC video.
+
+Brand context (LOCKED):
+Industry: {industry}
+Audience: {audience}
+Vibe: {vibe}
+
+This context must subtly influence the dialogue through:
+- Word choice and phrasing that resonates with the audience
+- Energy level and pacing that matches the vibe
+- Relatability to the industry space
+
+Do NOT:
+- Repeat the brand context verbatim
+- Use marketing slogans or ad language
+- Add calls-to-action
 
 Dialogue requirements:
 - Target 18–26 words (slightly longer than typical ads)
@@ -71,20 +93,21 @@ Dialogue requirements:
 - Use natural spoken pacing with short pauses implied by commas or em dashes
 - Dialogue should feel like one continuous thought, not punchy slogans
 - Allow reflective, moment-to-moment narration (e.g., effort, progress, mindset)
-- First-person only (“I”, “my”)
+- First-person only ("I", "my")
 - Calm, grounded delivery — not rushed
 - No call-to-action
 - No exaggerated excitement
 - Must be safe for continuous lip motion (no abrupt stops)
 
 Style guidance:
-- Think “talking while doing something” rather than “selling”
+- Think "talking while doing something" rather than "selling"
 - Avoid sharp sentence breaks; prefer flowing phrases
 - One idea evolving into the next
+- Let the brand context influence the creator's voice naturally
 
 Output ONLY the dialogue text.
 No quotes. No labels.
-'''
+"""
 
         # Check if image is URL or local path
         if image_path.startswith(('http://', 'https://')):
@@ -122,6 +145,9 @@ No quotes. No labels.
         product_name: str,
         tone: str,
         platform: str,
+        industry: str,
+        audience: str,
+        vibe: str,
         output_filename: str = None
     ) -> str:
         """
@@ -133,6 +159,9 @@ No quotes. No labels.
             product_name: Name of the product
             tone: Desired tone for the video
             platform: Target platform
+            industry: Brand industry context
+            audience: Brand audience context
+            vibe: Brand vibe context
             output_filename: Optional filename to save the script (default: auto-generated)
             
         Returns:
@@ -154,14 +183,32 @@ No quotes. No labels.
             ugc_image_reference, 
             product_name, 
             tone, 
-            platform
+            platform,
+            industry,
+            audience,
+            vibe
         )
         
         if dialogue.startswith("Error"):
             return dialogue
         
         # Stage 2: Generate video script with dialogue context
-        system_prompt = f'''You are a professional UGC video director and lip-sync supervisor for short-form AI-generated videos.
+        system_prompt = f"""You are a professional UGC video director and lip-sync supervisor for short-form AI-generated videos.
+
+BRAND CONTEXT (LOCKED):
+Industry: {industry}
+Audience: {audience}
+Vibe: {vibe}
+
+This context must subtly influence the video script through:
+- Visual energy and body language that matches the vibe
+- Framing and environment that feels authentic to the industry
+- Overall creator presence that resonates with the audience
+
+Do NOT:
+- Repeat the brand context verbatim
+- Add marketing elements or text overlays
+- Force unnatural product placement
 
 DIALOGUE CONTEXT:
 The creator will be speaking the provided dialogue using visual-only lip motion (NO AUDIO).
@@ -239,12 +286,15 @@ ENDING FRAME:
 
 IMPORTANT:
 If the script would require more than one scene, camera change, cut, subtitle, or sip — DO NOT GENERATE IT.
-
-
-'''
+"""
         
         # User prompt with context
         user_prompt = f"""Generate an 8-second video script with the following parameters:
+
+Brand context (LOCKED):
+- Industry: {industry}
+- Audience: {audience}
+- Vibe: {vibe}
 
 UGC Image Reference: {ugc_image_reference}
 Product Name: {product_name}
@@ -252,7 +302,7 @@ Tone: {tone}
 Platform: {platform}
 Dialogue (lip motion): {dialogue}
 
-Use the visual identity from the UGC image reference. Create a script that showcases the product naturally and authentically while the creator speaks the dialogue."""
+Use the visual identity from the UGC image reference. Create a script that showcases the product naturally and authentically while the creator speaks the dialogue. Let the brand context influence the visual energy and creator presence."""
         
         try:
             # Call GPT-5.2 via AI/ML API
@@ -297,7 +347,10 @@ if __name__ == "__main__":
         ugc_image_reference="ugc_ea0bf77a-dc81-4770-b12e-403df1597d1f_20251223_160955_1.png",
         product_name="redbull",
         tone="calm",
-        platform="instagram stories"
+        platform="instagram stories",
+        industry="energy drinks",
+        audience="active lifestyle enthusiasts",
+        vibe="authentic and energetic"
     )
     
     print(result)

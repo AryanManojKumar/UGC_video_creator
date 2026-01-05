@@ -1,9 +1,10 @@
 """
 Prompt Variator Tool for CrewAI
-Generates 4 diverse prompt variants from a base intent
+Generates 4 diverse prompt variants from a base intent and images
 """
 import os
 import json
+import base64
 from crewai.tools import BaseTool
 from typing import Type
 from pydantic import BaseModel, Field
@@ -14,26 +15,59 @@ from openai import OpenAI
 class PromptVariatorInput(BaseModel):
     """Input schema for PromptVariatorTool."""
     base_intent: str = Field(..., description="Base user intent for generating diverse prompt variants")
+    person_image_path: str = Field(..., description="File path to the person image (e.g., 'uploads/person.jpg')")
+    product_image_path: str = Field(..., description="File path to the product image (e.g., 'uploads/product.jpg')")
+    
+    # Brand context (required, read-only)
+    industry: str = Field(..., description="Brand industry context")
+    audience: str = Field(..., description="Brand audience context")
+    vibe: str = Field(..., description="Brand vibe context")
 
 class PromptVariatorTool(BaseTool):
     name: str = "UGC Prompt Variator"
-    description: str = """Generates 4 diverse prompt variants from a base user intent. 
-    Each variant preserves identity and intent but varies pose, hand usage, framing, and body orientation.
-    Returns a JSON string with 4 prompts that you can use for image generation."""
+    description: str = """Generates 4 diverse prompt variants from person image, product image, and base intent. 
+    Analyzes both images to create realistic UGC prompts that vary pose, hand usage, framing, and body orientation.
+    Returns 4 prompts for image generation."""
     args_schema: Type[BaseModel] = PromptVariatorInput
     cache_function: bool = False
 
+    def _encode_image(self, image_path: str) -> str:
+        """Encode image file to base64 string."""
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+
     @traceable(
         name="prompt_variator_tool",
-        tags=["prompt-variation", "gpt-5"],
-        metadata={"model": "gpt-5-2025-08-07", "num_variants": 4}
+        tags=["prompt-variation", "gpt-5.2", "vision"],
+        metadata={"model": "gpt-5.2-2025-12-11", "num_variants": 4}
     )
-    def _run(self, base_intent: str) -> str:
+    def _run(
+        self, 
+        base_intent: str, 
+        person_image_path: str, 
+        product_image_path: str,
+        industry: str,
+        audience: str,
+        vibe: str
+    ) -> str:
         """
-        Generate 4 diverse prompt variants using GPT-5.
+        Generate 4 diverse prompt variants using GPT-5.2 with vision.
         """
         with langsmith.trace(
-            name="initialize_gpt5_client",
+            name="encode_images",
+            tags=["image-processing"]
+        ) as encode_trace:
+            try:
+                person_base64 = self._encode_image(person_image_path)
+                product_base64 = self._encode_image(product_image_path)
+                encode_trace.outputs = {"person_encoded": True, "product_encoded": True}
+            except Exception as e:
+                error_msg = f"Failed to encode images: {str(e)}"
+                encode_trace.outputs = {"error": error_msg}
+                return f"❌ Error: {error_msg}"
+
+        with langsmith.trace(
+            name="initialize_gpt52_client",
             tags=["llm-initialization"]
         ) as init_trace:
             client = OpenAI(
@@ -42,36 +76,153 @@ class PromptVariatorTool(BaseTool):
             )
             init_trace.outputs = {"client": "OpenAI"}
 
-        system_instruction = """You are a UGC Prompt Variator. Given a base user intent, generate 4 concise, image-model-ready prompts that preserve identity and intent but vary pose, hand usage, framing, and body orientation. Do not change clothing, environment, lighting, or facial expression.
+        system_instruction = """You are an Image-Aware UGC Prompt Maker.
 
-Output STRICT JSON format:
-{"prompts": ["prompt_variant_1", "prompt_variant_2", "prompt_variant_3", "prompt_variant_4"]}
+You are given:
+1) A person image
+2) A product image  
+3) A base user intent
 
-Variation guidelines:
-- Variant 1: Mid-shot, holding product with right hand, facing camera directly
-- Variant 2: Waist-up, holding product with left hand, body slightly angled
-- Variant 3: Close framing, both hands on product, front view
-- Variant 4: Mid-shot, one hand gesture, body at 45-degree angle
+Your task is to generate 4 concise, image-model-ready prompts for authentic, creator-style UGC imagery suitable for later lip-sync video.
 
-GLOBAL CONSTRAINTS (MANDATORY):
-- In all prompt variants, the product must be held below face level (below chin/jawline), at chest or torso height only
-- The product must never overlap or approach the mouth, lips, jawline, or lower face
-- Hands must not occlude the lips or mouth area; the mouth must remain fully visible for later lip-sync
-- Fine printed text, nutrition labels, and barcodes must be naturally obscured by grip, angle, depth of field, or crop
-- Avoid sharp focus on small product text; prioritize natural blur or partial occlusion
+You MUST base your prompts on what is actually visible in the images.
+Do NOT assume features that are not clearly present.
+
+────────────────────────────────────────
+OUTPUT FORMAT (STRICT)
+────────────────────────────────────────
+Return STRICT JSON only:
+{
+  "prompts": [
+    "prompt_variant_1",
+    "prompt_variant_2",
+    "prompt_variant_3",
+    "prompt_variant_4"
+  ]
+}
+
+────────────────────────────────────────
+VARIATION GUIDELINES
+────────────────────────────────────────
+- Variant 1: Mid-shot, facing camera directly
+- Variant 2: Waist-up, body slightly angled
+- Variant 3: Closer framing, both hands involved naturally
+- Variant 4: Mid-shot, body at ~45° angle with subtle gesture
+
+────────────────────────────────────────
+UGC REALISM (CRITICAL)
+────────────────────────────────────────
+- Image must feel candid, human, and creator-made
+- Avoid staged, catalog, or advertisement-style posing
+- Encourage relaxed posture, natural grip, slight asymmetry
+- Product interaction should feel casual or mid-gesture
+- Slight framing imperfection is preferred over rigid centering
+
+────────────────────────────────────────
+LIP-SYNC SAFETY (MANDATORY)
+────────────────────────────────────────
+- The mouth and lips must remain fully visible in all variants
+- Hands or product must NOT cross or overlap the mouth region
+- Natural hand motion is allowed as long as lips stay unobstructed
+- Do NOT force rigid chest-level positioning
+
+────────────────────────────────────────
+PRODUCT TRUTH & LABEL HANDLING (VERY IMPORTANT)
+────────────────────────────────────────
+FIRST, visually inspect the product image and determine:
+- Is there clearly visible printed text, branding, or labels on the product?
+
+IF NO visible text or branding is clearly present:
+- Treat the product as having NO labels
+- Do NOT mention text, labels, barcodes, fine print, or blurring
+- Do NOT invent compliance or hiding behavior
+
+IF visible text or branding IS clearly present:
+- Do NOT highlight or showcase it
+- De-emphasize it naturally using:
+  • casual grip
+  • natural angle
+  • depth of field
+- Describe this subtly and visually
+- NEVER use compliance language such as "hide", "obscure", "avoid", or "blur"
+
+────────────────────────────────────────
+CONSISTENCY RULES
+────────────────────────────────────────
+- Preserve the person's actual appearance from the image
+- Preserve the product's actual appearance from the image
+- Do NOT change identity, clothing, or product characteristics
+
+────────────────────────────────────────
+STYLE & LANGUAGE
+────────────────────────────────────────
+- Write in natural, visual, creator-style language
+- No safety disclaimers, policy wording, or explanations
+- No meta commentary about the images
+- Focus on how the scene FEELS, not how it complies
+
+────────────────────────────────────────
+BRAND CONTEXT (LOCKED)
+────────────────────────────────────────
+You may receive brand context such as:
+- Industry
+- Audience
+- Vibe
+
+This context must  influence the prompts.
+
+Apply it through:
+- background, clothes, props.
+- Framing and realism
+- Overall creator tone
+
+Do NOT:
+- Repeat the brand context verbatim
+- Use marketing slogans or ad language
+- Add calls-to-action
+"""
+
+        # Build brand context block (always present)
+        brand_context_block = f"""Brand context (LOCKED):
+Industry: {industry}
+Audience: {audience}
+Vibe: {vibe}
+
 """
 
         with langsmith.trace(
-            name="call_gpt5_for_variants",
-            inputs={"base_intent": base_intent},
-            tags=["llm-call"]
+            name="call_gpt52_for_variants",
+            inputs={"base_intent": base_intent, "brand_context": {"industry": industry, "audience": audience, "vibe": vibe}},
+            tags=["llm-call", "vision"]
         ) as llm_trace:
             try:
                 response = client.chat.completions.create(
-                    model="openai/gpt-5-2025-08-07",
+                    model="gpt-5.2-2025-12-11",
                     messages=[
                         {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": f"Base intent: {base_intent}\n\nGenerate 4 prompt variants."}
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"""{brand_context_block}Base intent: {base_intent}
+
+Analyze the person and product images and generate 4 prompt variants."""
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{person_base64}"
+                                    }
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{product_base64}"
+                                    }
+                                }
+                            ]
+                        }
                     ],
                     temperature=0.7,
                     timeout=60
