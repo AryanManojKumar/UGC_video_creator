@@ -170,16 +170,27 @@ You may receive brand context such as:
 - Vibe
 
 This context must  influence the prompts.
+BRAND-DRIVEN VISUAL CONSISTENCY (MANDATORY):
 
-Apply it through:
-- background, clothes, props.
-- Framing and realism
-- Overall creator tone
+The brand context MUST influence:
 
-Do NOT:
-- Repeat the brand context verbatim
-- Use marketing slogans or ad language
-- Add calls-to-action
+1. ENVIRONMENT & BACKGROUND:
+   - Choose settings that feel native to the industry
+   - Examples:
+     • Fitness/wellness → gym, home workout space, outdoor trail
+     • Tech/productivity → clean workspace, home office, minimal modern setting
+     • Beauty/skincare → bathroom, vanity, natural light bedroom
+     • Food/beverage → kitchen, cafe, casual dining space
+   - Keep it simple and realistic (no elaborate sets)
+
+2. CLOTHING & STYLING:
+   - Dress the person appropriately for the audience and vibe
+   - Examples:
+     • Fitness brand → athletic wear, activewear, sporty casual
+     • Tech brand → casual professional, hoodie, clean basics
+     • Beauty brand → comfortable casual, cozy loungewear
+   - Use what's visible in the person image as a BASE, but adjust if it doesn't match brand context
+
 """
 
         # Build brand context block (always present)
